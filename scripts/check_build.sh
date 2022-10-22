@@ -12,7 +12,7 @@ cd temp
 mkdir -p build-tsan
 pushd build-tsan
 
-cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-14 -DUSE_SANITIZER=tsan
+cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DUSE_SANITIZER=tsan
 cmake --build . --config Debug --parallel
 
 popd
@@ -21,7 +21,7 @@ popd
 mkdir -p build-asan
 pushd build-asan
 
-cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-14 -DUSE_SANITIZER=asan
+cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DUSE_SANITIZER=asan
 cmake --build . --config Debug --parallel
 
 popd
@@ -30,7 +30,7 @@ popd
 mkdir -p build-release
 pushd build-release
 
-cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++-14
+cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
 cmake --build . --config Release --parallel
 
 popd
@@ -38,7 +38,7 @@ popd
 mkdir -p build-debug
 pushd build-debug
 
-cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-14
+cmake -G "Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++
 cmake --build . --config Debug --parallel
 
 popd
