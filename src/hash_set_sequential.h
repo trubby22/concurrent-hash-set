@@ -18,7 +18,7 @@ public:
     }
 
     bool Add(T elem) final {
-        if (Contains(elem)) return false;
+        if (ContainsNoLock(elem)) return false;
         size_t my_bucket = std::hash<T>()(elem) % bucket_count_;
         table_[my_bucket].push_back(elem);
         elem_count_++;
@@ -29,18 +29,16 @@ public:
     }
 
     bool Remove(T elem) final {
-        if (!Contains(elem)) return false;
+        if (!ContainsNoLock(elem)) return false;
+        assert(elem_count_ != 0);
         size_t my_bucket = std::hash<T>()(elem) % bucket_count_;
-        std::vector<T> small_table = table_[my_bucket];
-        small_table.erase(std::remove(small_table.begin(), small_table.end(), elem), small_table.end());
+        table_[my_bucket].erase(std::find(table_[my_bucket].begin(), table_[my_bucket].end(), elem));
         elem_count_--;
         return true;
     }
 
     [[nodiscard]] bool Contains(T elem) final {
-        size_t my_bucket = std::hash<T>()(elem) % bucket_count_;
-        std::vector<T> small_table = table_[my_bucket];
-        return std::find(small_table.begin(), small_table.end(), elem) != small_table.end();
+        return ContainsNoLock(elem);
     }
 
     [[nodiscard]] size_t Size() const final {
@@ -73,6 +71,12 @@ private:
             }
         }
         table_ = table;
+    }
+
+    bool ContainsNoLock(T elem) {
+        size_t my_bucket = std::__1::hash<T>()(elem) % bucket_count_;
+        std::__1::vector<T> small_table = table_[my_bucket];
+        return std::find(small_table.begin(), small_table.end(), elem) != small_table.end();
     }
 
 };
