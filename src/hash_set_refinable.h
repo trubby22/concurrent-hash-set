@@ -70,7 +70,7 @@ private:
   std::atomic<size_t> bucket_count_;
   std::atomic<size_t> elem_count_;
   std::vector<std::mutex> mutexes_;
-  std::atomic<size_t> owner_{0};
+  std::mutex resizing_lock;
 
   bool ContainsNoLock(T elem, size_t my_bucket) {
     std::vector<T> small_table = table_[my_bucket];
@@ -82,30 +82,28 @@ private:
 
   void Resize() {
     size_t old_capacity = bucket_count_.load();
+    resizing_lock.lock();
     size_t new_capacity = 2 * old_capacity;
-    size_t me = GetThreadId();
-    size_t zero = 0;
-    if (owner_.compare_exchange_strong(zero, me)) {
-      if (bucket_count_.load() != old_capacity) {
-        owner_.store(0);
-        return;
-      }
-      Quiesce();
-      bucket_count_.store(new_capacity);
-      mutexes_ = std::vector<std::mutex>(bucket_count_.load());
-      std::vector<std::vector<T>> table;
-      table.resize(new_capacity);
-      for (size_t i = 0; i < new_capacity; i++) {
-        table[i] = std::vector<T>();
-      }
-      for (std::vector<T> bucket : table_) {
-        for (T elem : bucket) {
-          table[std::hash<T>()(elem) % new_capacity].push_back(elem);
-        }
-      }
-      table_ = table;
-      owner_.store(0);
+    if (bucket_count_.load() != old_capacity) {
+
+      resizing_lock.unlock();
+      return;
     }
+    Quiesce();
+    bucket_count_.store(new_capacity);
+    mutexes_ = std::vector<std::mutex>(bucket_count_.load());
+    std::vector<std::vector<T>> table;
+    table.resize(new_capacity);
+    for (size_t i = 0; i < new_capacity; i++) {
+      table[i] = std::vector<T>();
+    }
+    for (std::vector<T> bucket : table_) {
+      for (T elem : bucket) {
+        table[std::hash<T>()(elem) % new_capacity].push_back(elem);
+      }
+    }
+    table_ = table;
+    resizing_lock.unlock();
     return;
   }
 
@@ -119,33 +117,16 @@ private:
   }
 
   void Acquire(T elem) {
-    size_t me = GetThreadId();
-    size_t who;
-    while (true) {
-      do {
-        who = owner_.load();
-      } while (who != 0 && who != me);
-      size_t old_mutexes_size = Size();
-      size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
-      mutexes_[my_bucket].lock();
-      who = owner_.load();
-      if ((owner_ == 0 || who == me) && Size() == old_mutexes_size) {
-        return;
-      } else {
-        mutexes_[my_bucket].unlock();
-      }
-    }
+    resizing_lock.lock();
+    size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
+    mutexes_[my_bucket].lock();
+    resizing_lock.unlock();
   }
 
   void Release(T elem) {
     mutexes_[std::hash<T>()(elem) % bucket_count_.load()].unlock();
   }
 
-  size_t GetThreadId() {
-    auto x = std::this_thread::get_id();
-    size_t y = std::hash<std::__thread_id>()(x);
-    return y;
-  }
 };
 
 #endif // HASH_SET_REFINABLE_H

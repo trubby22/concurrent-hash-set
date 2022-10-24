@@ -34,13 +34,7 @@ public:
     elem_count_.fetch_add(1);
     mutexes_[my_lock].unlock();
     if (Policy()) {
-      for (auto &mutex : mutexes_) {
-        mutex.lock();
-      }
       Resize();
-      for (auto &mutex : mutexes_) {
-        mutex.unlock();
-      }
     }
     return true;
   }
@@ -84,6 +78,10 @@ private:
 
   void Resize() {
     size_t old_capacity = bucket_count_.load();
+    for (auto &mutex : mutexes_) {
+      mutex.lock();
+    }
+    if (old_capacity )
     size_t new_capacity = 2 * old_capacity;
     bucket_count_.store(new_capacity);
     std::vector<std::vector<T>> table;
@@ -97,6 +95,9 @@ private:
       }
     }
     table_ = table;
+    for (auto &mutex : mutexes_) {
+      mutex.unlock();
+    }
   }
 };
 
