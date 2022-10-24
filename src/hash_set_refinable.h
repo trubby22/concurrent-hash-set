@@ -85,7 +85,6 @@ private:
     resizing_lock.lock();
     size_t new_capacity = 2 * old_capacity;
     if (bucket_count_.load() != old_capacity) {
-
       resizing_lock.unlock();
       return;
     }

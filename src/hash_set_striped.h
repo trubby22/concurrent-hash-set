@@ -81,7 +81,12 @@ private:
     for (auto &mutex : mutexes_) {
       mutex.lock();
     }
-    if (old_capacity )
+    if (old_capacity != bucket_count_.load()) {
+      for (auto &mutex : mutexes_) {
+        mutex.unlock();
+      }
+      return;
+    }
     size_t new_capacity = 2 * old_capacity;
     bucket_count_.store(new_capacity);
     std::vector<std::vector<T>> table;
