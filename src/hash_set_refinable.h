@@ -10,6 +10,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <shared_mutex>
 
 #include "src/hash_set_base.h"
 #include "src/scoped_vector_lock.h"
@@ -68,7 +69,7 @@ private:
   std::atomic<size_t> bucket_count_;
   std::atomic<size_t> elem_count_;
   std::vector<std::mutex> mutexes_;
-  std::mutex resizing_mutex_;
+  std::shared_mutex resizing_mutex_;
 
   bool ContainsNoLock(T elem, size_t my_bucket) {
     std::vector<T> small_table = table_[my_bucket];
@@ -80,7 +81,7 @@ private:
 
   void Resize() {
     size_t old_capacity = bucket_count_.load();
-    std::scoped_lock<std::mutex> resizing_lock(resizing_mutex_);
+    std::lock_guard<std::shared_mutex> writer_lock(resizing_mutex_);
     size_t new_capacity = 2 * old_capacity;
     if (bucket_count_.load() != old_capacity) {
       return;
@@ -104,7 +105,7 @@ private:
   void Quiesce() { ScopedVectorLock scopedLockVector(mutexes_); }
 
   void Acquire(T elem) {
-    std::scoped_lock<std::mutex> scopedLock(resizing_mutex_);
+    std::shared_lock<std::shared_mutex> reader_lock(resizing_mutex_);
     size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
     mutexes_[my_bucket].lock();
   }
