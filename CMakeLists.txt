@@ -41,7 +41,7 @@ add_library(checks STATIC
   src/checks/standalone_refinable.cc
   src/checks/standalone_sequential.cc
   src/checks/standalone_striped.cc
-  src/checks/all.cc)
+  src/checks/all.cc src/scoped_vector_lock.h)
 target_include_directories(checks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 function(add_hash_set_demo name)

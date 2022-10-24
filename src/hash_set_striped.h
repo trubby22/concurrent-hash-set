@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "src/hash_set_base.h"
+#include "src/scoped_vector_lock.h"
 
 template <typename T> class HashSetStriped : public HashSetBase<T> {
 public:
@@ -24,15 +25,15 @@ public:
 
   bool Add(T elem) final {
     size_t my_lock = std::hash<T>()(elem) % initial_bucket_count_;
-    mutexes_[my_lock].lock();
-    size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
-    if (ContainsNoLock(elem, my_bucket)) {
-      mutexes_[my_lock].unlock();
-      return false;
+    {
+      std::scoped_lock<std::mutex> lock(mutexes_[my_lock]);
+      size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
+      if (ContainsNoLock(elem, my_bucket)) {
+        return false;
+      }
+      table_[my_bucket].push_back(elem);
+      elem_count_.fetch_add(1);
     }
-    table_[my_bucket].push_back(elem);
-    elem_count_.fetch_add(1);
-    mutexes_[my_lock].unlock();
     if (Policy()) {
       Resize();
     }
@@ -78,13 +79,8 @@ private:
 
   void Resize() {
     size_t old_capacity = bucket_count_.load();
-    for (auto &mutex : mutexes_) {
-      mutex.lock();
-    }
+    ScopedVectorLock scopedLockVector(mutexes_);
     if (old_capacity != bucket_count_.load()) {
-      for (auto &mutex : mutexes_) {
-        mutex.unlock();
-      }
       return;
     }
     size_t new_capacity = 2 * old_capacity;
@@ -100,9 +96,6 @@ private:
       }
     }
     table_ = table;
-    for (auto &mutex : mutexes_) {
-      mutex.unlock();
-    }
   }
 };
 

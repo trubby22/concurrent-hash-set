@@ -4,14 +4,15 @@
 #include <algorithm>
 #include <atomic>
 #include <cassert>
-#include <vector>
+#include <functional>
 #include <mutex>
-#include <vector>
-#include <string>
 #include <sstream>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "src/hash_set_base.h"
+#include "src/scoped_vector_lock.h"
 
 template <typename T> class HashSetRefinable : public HashSetBase<T> {
 public:
@@ -25,15 +26,15 @@ public:
   }
 
   bool Add(T elem) final {
-    Acquire(elem);
-    size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
-    if (ContainsNoLock(elem, my_bucket)) {
-      Release(elem);
-      return false;
+    {
+      CustomScopedLock customScopedLock(this, elem);
+      size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
+      if (ContainsNoLock(elem, my_bucket)) {
+        return false;
+      }
+      table_[my_bucket].push_back(elem);
+      elem_count_.fetch_add(1);
     }
-    table_[my_bucket].push_back(elem);
-    elem_count_.fetch_add(1);
-    Release(elem);
     if (Policy()) {
       Resize();
     }
@@ -41,25 +42,22 @@ public:
   }
 
   bool Remove(T elem) final {
-    Acquire(elem);
+    CustomScopedLock customScopedLock(this, elem);
     size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
     if (!ContainsNoLock(elem, my_bucket)) {
-      Release(elem);
       return false;
     }
     assert(elem_count_ != 0);
     table_[my_bucket].erase(
         std::find(table_[my_bucket].begin(), table_[my_bucket].end(), elem));
     elem_count_.fetch_sub(1);
-    Release(elem);
     return true;
   }
 
   [[nodiscard]] bool Contains(T elem) final {
-    Acquire(elem);
+    CustomScopedLock customScopedLock(this, elem);
     size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
     bool res = ContainsNoLock(elem, my_bucket);
-    Release(elem);
     return res;
   }
 
@@ -70,7 +68,7 @@ private:
   std::atomic<size_t> bucket_count_;
   std::atomic<size_t> elem_count_;
   std::vector<std::mutex> mutexes_;
-  std::mutex resizing_lock;
+  std::mutex resizing_mutex_;
 
   bool ContainsNoLock(T elem, size_t my_bucket) {
     std::vector<T> small_table = table_[my_bucket];
@@ -82,10 +80,9 @@ private:
 
   void Resize() {
     size_t old_capacity = bucket_count_.load();
-    resizing_lock.lock();
+    std::scoped_lock<std::mutex> resizing_lock(resizing_mutex_);
     size_t new_capacity = 2 * old_capacity;
     if (bucket_count_.load() != old_capacity) {
-      resizing_lock.unlock();
       return;
     }
     Quiesce();
@@ -102,30 +99,32 @@ private:
       }
     }
     table_ = table;
-    resizing_lock.unlock();
-    return;
   }
 
-  void Quiesce() {
-    for (std::mutex& m : mutexes_) {
-      m.lock();
-    }
-    for (std::mutex& m : mutexes_) {
-      m.unlock();
-    }
-  }
+  void Quiesce() { ScopedVectorLock scopedLockVector(mutexes_); }
 
   void Acquire(T elem) {
-    resizing_lock.lock();
+    std::scoped_lock<std::mutex> scopedLock(resizing_mutex_);
     size_t my_bucket = std::hash<T>()(elem) % bucket_count_.load();
     mutexes_[my_bucket].lock();
-    resizing_lock.unlock();
   }
 
   void Release(T elem) {
     mutexes_[std::hash<T>()(elem) % bucket_count_.load()].unlock();
   }
 
+  class CustomScopedLock {
+  public:
+    CustomScopedLock(HashSetRefinable<T> *hashSetRefinable, T elem)
+        : hashSetRefinable_(hashSetRefinable), elem_(elem) {
+      hashSetRefinable_->Acquire(elem_);
+    }
+    ~CustomScopedLock() { hashSetRefinable_->Release(elem_); }
+
+  private:
+    HashSetRefinable<T> *hashSetRefinable_;
+    T elem_;
+  };
 };
 
 #endif // HASH_SET_REFINABLE_H
