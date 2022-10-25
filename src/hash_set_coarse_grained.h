@@ -13,13 +13,13 @@ template <typename T> class HashSetCoarseGrained : public HashSetBase<T> {
 public:
   explicit HashSetCoarseGrained(size_t capacity)
       : bucket_count_(capacity), elem_count_(0) {
-
     table_.resize(bucket_count_);
     for (size_t i = 0; i < bucket_count_; i++) {
       table_[i] = std::vector<T>();
     }
   }
 
+  // we use a scoped lock to ensure that the buckets are not changed during the add function
   bool Add(T elem) final {
     std::scoped_lock<std::mutex> lock(mutex_);
     if (ContainsNoLock(elem))
@@ -33,6 +33,7 @@ public:
     return true;
   }
 
+  // we lock the global mutex until the remove command is finished
   bool Remove(T elem) final {
     std::scoped_lock<std::mutex> lock(mutex_);
     if (!ContainsNoLock(elem))
@@ -45,6 +46,7 @@ public:
     return true;
   }
 
+  // we lock the global mutex to ensure that the hash set is not changed during the check function
   [[nodiscard]] bool Contains(T elem) final {
     std::scoped_lock<std::mutex> lock(mutex_);
     return ContainsNoLock(elem);
@@ -55,7 +57,9 @@ public:
 private:
   std::vector<std::vector<T>> table_;
   size_t bucket_count_;
+  // we ensure that the element count is right by making it an atomic variable
   std::atomic<size_t> elem_count_;
+  // we have a single mutex for all operations of the hash set
   std::mutex mutex_;
 
   bool ContainsNoLock(T elem) {

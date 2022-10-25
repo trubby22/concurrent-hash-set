@@ -23,6 +23,8 @@ public:
     }
   }
 
+  // we find the mutex corresponding to our bucket and then we lock it so no one else accesses
+  // the same bucket
   bool Add(T elem) final {
     size_t my_lock = std::hash<T>()(elem) % initial_bucket_count_;
     {
@@ -40,6 +42,8 @@ public:
     return true;
   }
 
+  // when removing an element we apply the same principle we did for the add operation
+  // so we lock the correct mutex remove the element from the bucket
   bool Remove(T elem) final {
     size_t my_lock = std::hash<T>()(elem) % initial_bucket_count_;
     std::scoped_lock<std::mutex> lock(mutexes_[my_lock]);
@@ -53,6 +57,7 @@ public:
     return true;
   }
 
+  // for the contains operation we again lock the corresponding mutex and search the bucket
   [[nodiscard]] bool Contains(T elem) final {
     size_t my_lock = std::hash<T>()(elem) % initial_bucket_count_;
     std::scoped_lock<std::mutex> lock(mutexes_[my_lock]);
@@ -64,9 +69,14 @@ public:
 
 private:
   std::vector<std::vector<T>> table_;
+  // we ensure that the bucket count is right by making it an atomic variable
   std::atomic<size_t> bucket_count_;
+  // we keep track of the initial bucket count because the vector of mutexes does not resize
   size_t initial_bucket_count_;
+  // the element count must be atomic, so that we can have multiple operations on separate buckets
   std::atomic<size_t> elem_count_;
+  // a vector of mutexes for each initial bucket at first
+  // after resizing more buckets will share the same lock
   std::vector<std::mutex> mutexes_;
 
   bool ContainsNoLock(T elem, size_t my_bucket) {
@@ -77,6 +87,8 @@ private:
 
   bool Policy() { return (elem_count_.load() / bucket_count_.load()) > 4; }
 
+  // when resizing we have to stop all other operations so we first lock the whole vector of mutexes
+  // using our custom scoped vector lock
   void Resize() {
     size_t old_capacity = bucket_count_.load();
     ScopedVectorLock scopedLockVector(mutexes_);
