@@ -6,11 +6,11 @@
 #include <cassert>
 #include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
-#include <shared_mutex>
 
 #include "src/hash_set_base.h"
 #include "src/scoped_vector_lock.h"
@@ -102,7 +102,12 @@ private:
     table_ = table;
   }
 
-  void Quiesce() { ScopedVectorLock scopedLockVector(mutexes_); }
+  void Quiesce() {
+    for (std::mutex &mutex : mutexes_) {
+      mutex.lock();
+      mutex.unlock();
+    }
+  }
 
   void Acquire(T elem) {
     std::shared_lock<std::shared_mutex> reader_lock(resizing_mutex_);
