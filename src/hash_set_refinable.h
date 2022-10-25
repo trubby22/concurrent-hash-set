@@ -15,6 +15,17 @@
 #include "src/hash_set_base.h"
 #include "src/scoped_vector_lock.h"
 
+
+/*
+ * The refinable hash set implemented mainly follows the Art of Multiprocessor Programming
+ * with some changes. Instead of having an atomic markable reference which C++
+ * does not natively support, we decided to have a shared mutex, in order to allow
+ * any non-resizable operations to occur the same as striped, but when resizing, the threads
+ * are unable to acquire any of the mutexes in the mutex vector. Another major change is in the
+ * Quiesce function, since C++ does not have IsLocked function on mutexes, we just get the
+ * ScopedLock for every mutex on the mutex vector to ensure that no thread has any of the mutexes
+ * allowing for the mutex vector to be resized safely.
+ */
 template <typename T> class HashSetRefinable : public HashSetBase<T> {
 public:
   explicit HashSetRefinable(size_t capacity)
