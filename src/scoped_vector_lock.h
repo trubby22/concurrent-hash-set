@@ -8,7 +8,8 @@
 #include <mutex>
 #include <vector>
 
-// auxiliary class for locking a vector of mutexes and unlocking them at the end of the scope
+// auxiliary class for locking a vector of mutexes and unlocking them at the end
+// of the scope
 class ScopedVectorLock {
 public:
   explicit ScopedVectorLock(std::vector<std::mutex> &mutexes)
