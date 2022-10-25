@@ -10,12 +10,13 @@
 #include "src/hash_set_base.h"
 
 /*
- * The coarse grained implementation of the concurrent hashset is mainly a straightforward
- * solution that involves utilizing a scoped lock on the same mutex for all operations.
- * Since this does not support reentrancy, we made a special function named ContainsNoLock
- * so that it can be used on add and remove. Bucket_count_ is atomic due to the reason
- * that Policy now occurs when threads have no locks, so there is a potential data race
- * in that specific point. Atomicity makes sure that the value can be updated in one step,
+ * The coarse grained implementation of the concurrent hashset is mainly a
+ * straightforward solution that involves utilizing a scoped lock on the same
+ * mutex for all operations. Since this does not support reentrancy, we made a
+ * special function named ContainsNoLock so that it can be used on add and
+ * remove. Bucket_count_ is atomic due to the reason that Policy now occurs when
+ * threads have no locks, so there is a potential data race in that specific
+ * point. Atomicity makes sure that the value can be updated in one step,
  * avoiding the potential data race.
  */
 template <typename T> class HashSetCoarseGrained : public HashSetBase<T> {

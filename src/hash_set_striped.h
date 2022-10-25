@@ -11,9 +11,10 @@
 #include "src/hash_set_base.h"
 #include "src/scoped_vector_lock.h"
 /*
- * The striped solution is mainly inspired on the Art of Multiprocessor Programming implementation.
- * We mostly acquire a scoped lock on a specific mutex based on the hash of the element. When resizing,
- * we followed the same principle as the book suggested, where we lock the entire mutex array so that
+ * The striped solution is mainly inspired on the Art of Multiprocessor
+ * Programming implementation. We mostly acquire a scoped lock on a specific
+ * mutex based on the hash of the element. When resizing, we followed the same
+ * principle as the book suggested, where we lock the entire mutex array so that
  * the hashset is not being accessed while resizing is happening.
  */
 template <typename T> class HashSetStriped : public HashSetBase<T> {
